@@ -34,8 +34,9 @@ def eval_loss(model: torch.nn.Module, val_data: torch.Tensor, batch_size: int, b
     model.train()
     return losses
 
-def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, block_size: int, lr: float, num_steps: int, eval_interval: int, eval_iterations: int, patience: int, checkpointing: bool) -> Tuple[List, List]:
+def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, block_size: int, lr: float, num_steps: int, eval_interval: int, eval_iterations: int, patience: int, checkpointing: bool, model_name: str) -> Tuple[List, List]:
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
     train_losses = []
     val_losses = []
 
@@ -51,6 +52,9 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
 
         loss.backward()
         optimizer.step()
+
+        if step % 100 == 0:
+            scheduler.step()
         
         if step % eval_interval == 0:
             eval_losses = eval_loss(model, val_data, batch_size, block_size, eval_iterations)
@@ -58,9 +62,9 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
             val_loss = eval_losses["val"].mean().item()
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            print(f"Step {step} || Train loss: {train_loss:.5f} || Val loss: {val_loss:.5f}")
+            print(f"Step {step} || Train loss: {train_loss:.5f} || Val loss: {val_loss:.5f} || Learning rate: {scheduler.get_last_lr()[0]}")
             if checkpointing:
-                torch.save(model.state_dict(), f"kalegpt-checkpoint-{step}.pth")
+                torch.save(model.state_dict(), f"{model_name}-checkpoint-{step}.pth")
 
             # Implement early stopping
             if val_loss >= best_val_loss:
@@ -71,13 +75,14 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
             else:
                 best_val_loss = val_loss
                 patience_counter = 0
-    
+
     return train_losses, val_losses
 
-def plot_training_curve(losses, title):
+def plot_training_curve(losses, eval_interval, title):
     plt.plot(losses)
     plt.xlabel("Step")
     plt.ylabel("Loss")
+    plt.xticks(ticks=[i for i in range(len(losses))], labels=[i*eval_interval for i in range(len(losses))], rotation=90)
     plt.title(title)
     plt.show()
 
@@ -94,6 +99,7 @@ if __name__ == "__main__":
     eval_iterations = 10
     patience = 10
     checkpointing = False
+    model_name = f"kalegpt-transformer-relu-1-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
@@ -104,15 +110,19 @@ if __name__ == "__main__":
     train_data = tokens[:n]
     val_data = tokens[n:]
 
-    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, block_size=block_size, num_layers=0).to(device)
+    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=0, block_size=block_size, device=device).to(device)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
-    train_losses, val_losses = train(model, train_data, batch_size, block_size, lr, num_steps, eval_interval, eval_iterations, patience, checkpointing)
+    train_losses, val_losses = train(model, train_data, batch_size, block_size, lr, num_steps, eval_interval, eval_iterations, patience, checkpointing, model_name)
 
-    torch.save(model.state_dict(), f"kalegpt-attention-1-{model_dim}-{num_heads}-{block_size}.pth")
+    torch.save(model.state_dict(), f"models/{model_name}.pth")
 
-    plot_training_curve(train_losses, title="Train loss")
-    plot_training_curve(val_losses, title="Validation loss")
+    plot_training_curve(train_losses, eval_interval, title="Train loss")
+    plot_training_curve(val_losses, eval_interval, title="Validation loss")
 
     print("Generating sample of 200 tokens...")
     generation = model.generate(torch.tensor([[0]]).to("mps"), 200)[0]
-    print(tokenizer.decode(generation))
+    generated_text = tokenizer.decode(generation)
+    print(generated_text)
+
+    with open(f"generations/{model_name}.txt", "w") as f:
+        f.write(generated_text)
