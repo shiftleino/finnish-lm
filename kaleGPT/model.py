@@ -3,16 +3,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class ReLU(nn.Module):
+    def forward(self, x):
+        x = torch.clamp(x, min=0)
+        return x
 
 class MLP(nn.Module):
     def __init__(self, model_dim):
         super().__init__()
         self.model_dim = model_dim
         self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
+        self.relu = ReLU()
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
     
     def forward(self, x: torch.Tensor):
-        h = F.relu(self.W_up(x))
+        h = self.relu(self.W_up(x))
         outputs = self.W_down(h)
         return outputs
 
@@ -62,7 +67,7 @@ class TransformerBlock(nn.Module):
 
         self.layer_norm = LayerNorm(self.model_dim, 1e-5)
         self.attn = MultiHeadAttention(self.model_dim, self.num_heads, self.device)
-        self.mlp = MLP(self.model_dim)
+        self.mlp = MLP(self.model_dim, self.device)
 
     def forward(self, x):
         layer_norm_output = self.layer_norm(x)
