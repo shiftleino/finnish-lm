@@ -99,7 +99,7 @@ if __name__ == "__main__":
     eval_iterations = 10
     patience = 10
     checkpointing = False
-    model_name = f"kalegpt-transformer-relu-1-{model_dim}-{num_heads}-{block_size}"
+    model_name = f"kalegpt-transformer-leaky-relu-1-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
