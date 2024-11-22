@@ -12,3 +12,4 @@ As the first language model we trained a character-level language model with the
  | Pre-norm Transformer (1, 1024, 16, 512) | ReLU | None | 1.90350 | 1.93926 | 12M | [Link](./kaleGPT/generations/kalegpt-transformer-no-pos-1-1024-16-512.txt) |
  | Pre-norm Transformer (1, 1024, 16, 512) | ReLU | Embeddings | 0.69168 | 1.17659 | 13M | [Link](./kaleGPT/generations/kalegpt-transformer-relu-1-1024-16-512.txt) |
 | Pre-norm Transformer (1, 1024, 16, 512) | Leaky ReLU | Embeddings | 0.75599 | 1.16501 | 13M | [Link](./kaleGPT/generations/kalegpt-transformer-leaky-relu-1-1024-16-512.txt) |
+| Pre-norm Transformer (1, 1024, 16, 512) | GeLU | Embeddings | 0.71472 | 1.18524 | 13M | [Link](./kaleGPT/generations/kalegpt-transformer-gelu-1-1024-16-512.txt) |

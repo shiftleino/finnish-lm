@@ -13,12 +13,17 @@ class LeakyReLU(nn.Module):
         x = torch.where(x >= 0, x, 0.01*x)
         return x
 
+class GeLU(nn.Module):
+    def forward(self, x):
+        x = 0.5*x*(1.0 + torch.tanh(0.7978845608*(x+0.044715*x*x*x))) # approximation from Hendrycks & Gimpel (2016)
+        return x
+
 class MLP(nn.Module):
     def __init__(self, model_dim):
         super().__init__()
         self.model_dim = model_dim
         self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
-        self.act = LeakyReLU()
+        self.act = GeLU()
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
     
     def forward(self, x: torch.Tensor):
