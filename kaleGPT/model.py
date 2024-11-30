@@ -42,10 +42,14 @@ class MLP(nn.Module):
         else:
             raise ValueError(f"Activation function '{self.act}' is not implemented.")
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
+        self.hidden_dropout = nn.Dropout()
+        self.out_dropout = nn.Dropout()
     
     def forward(self, x: torch.Tensor):
         h = self.act(self.W_up(x))
+        h = self.hidden_dropout(h)
         outputs = self.W_down(h)
+        outputs = self.out_dropout(outputs)
         return outputs
 
 class MultiHeadAttention(nn.Module):
@@ -59,8 +63,10 @@ class MultiHeadAttention(nn.Module):
         # All weights grouped together for efficiency as same dim in q, k, v
         self.W_qkv = torch.nn.Linear(self.model_dim, 3*self.model_dim) # 3 for query, key, value
         self.W_o = nn.Linear(self.model_dim, self.model_dim)
+        self.attn_dropout = nn.Dropout()
+        self.out_dropout = nn.Dropout()
         self.register_buffer("mask", torch.tril(torch.ones((self.max_block_size, self.max_block_size))) == 0)
-    
+
     def forward(self, x: torch.Tensor):
         batch_size, block_size, _ = x.shape
         qkv = self.W_qkv(x)
@@ -71,7 +77,9 @@ class MultiHeadAttention(nn.Module):
         qk = q @ k.transpose(2, 3) / math.sqrt(self.attn_dim)
         masked_qk = torch.masked_fill(qk, self.mask[:block_size, :block_size], float("-inf"))
         attn_o = F.softmax(masked_qk, dim=-1) @ values.transpose(1, 2)
+        attn_o = self.attn_dropout(attn_o)
         outputs = self.W_o(attn_o.transpose(1, 2).reshape(batch_size, block_size, self.model_dim)) # Use reshape as tensor is not contiguous due to transposes
+        outputs = self.out_dropout(outputs)
         return outputs
 
 class LayerNorm(nn.Module):

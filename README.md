@@ -15,3 +15,4 @@ As the first language model we trained a character-level language model with the
 | Pre-norm Transformer (1, 1024, 16, 512) | GELU | Embeddings | 0.71472 | 1.18524 | 13M | [Link](./kaleGPT/generations/kalegpt-transformer-gelu-1-1024-16-512.txt) |
 | Pre-norm Transformer (3, 768, 12, 512) | ReLU | Embeddings | 0.49662 | 1.15837 | 22M | [Link](./kaleGPT/generations/kalegpt-relu-3-768-12-512.txt) |
 | Pre-norm Transformer (3, 768, 12, 512) | GELU | Embeddings | 0.43291 | 1.23698 | 22M | [Link](./kaleGPT/generations/kalegpt-gelu-3-768-12-512.txt) |
+| Pre-norm Transformer with Dropout (3, 768, 12, 512) | GELU | Embeddings | 0.82735 | 1.01666 | 22M | [Link](./kaleGPT/generations/kalegpt-gelu-3-768-12-512.txt) |

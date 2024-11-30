@@ -105,8 +105,8 @@ if __name__ == "__main__":
     eval_iterations = 10
     patience = 10
     checkpointing = False
-    num_tokens_generate = 500
-    model_name = f"kalegpt-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
+    num_tokens_generate = 300
+    model_name = f"kalegpt-dropout-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
