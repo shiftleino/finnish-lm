@@ -17,13 +17,30 @@ class GELU(nn.Module):
     def forward(self, x):
         x = 0.5*x*(1.0 + torch.tanh(0.7978845608*(x+0.044715*x*x*x))) # approximation from Hendrycks & Gimpel (2016)
         return x
+    
+class Dropout(nn.Module):
+    def __init__(self, dropout_rate):
+        self.dropout_rate = dropout_rate
+
+    def forward(self, x):
+        pass
+
+    def backward(self, x):
+        pass
 
 class MLP(nn.Module):
-    def __init__(self, model_dim):
+    def __init__(self, model_dim, act):
         super().__init__()
         self.model_dim = model_dim
         self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
-        self.act = GELU()
+        if act == "relu":
+            self.act = ReLU()
+        elif act == "lrelu":
+            self.act = LeakyReLU()
+        elif act == "gelu":
+            self.act = GELU()
+        else:
+            raise ValueError(f"Activation function '{self.act}' is not implemented.")
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
     
     def forward(self, x: torch.Tensor):
@@ -70,16 +87,17 @@ class LayerNorm(nn.Module):
         return self.gamma * normalized + self.beta
 
 class TransformerBlock(nn.Module):
-    def __init__(self, model_dim: int, num_heads: int, max_block_size: int):
+    def __init__(self, model_dim: int, num_heads: int, max_block_size: int, act: str):
         super().__init__()
         self.model_dim = model_dim
         self.num_heads = num_heads
         self.max_block_size = max_block_size
+        self.act = act
 
         self.layer_norm_pre_attn = LayerNorm(self.model_dim, 1e-5)
         self.attn = MultiHeadAttention(self.model_dim, self.num_heads, self.max_block_size)
         self.layer_norm_pre_mlp = LayerNorm(self.model_dim, 1e-5)
-        self.mlp = MLP(self.model_dim)
+        self.mlp = MLP(self.model_dim, self.act)
 
     def forward(self, x):
         attn_output = self.attn(self.layer_norm_pre_attn(x)) + x
@@ -87,17 +105,18 @@ class TransformerBlock(nn.Module):
         return mlp_output
 
 class KaleGPT(nn.Module):
-    def __init__(self, vocab_size, model_dim, num_heads, num_layers, block_size, device):
+    def __init__(self, vocab_size, model_dim, num_heads, num_layers, block_size, act, device):
         super().__init__()
         self.vocab_size = vocab_size
         self.model_dim = model_dim
         self.num_heads = num_heads
         self.num_layers = num_layers
         self.block_size = block_size
+        self.act = act
         self.device = device
         self.embedding = nn.Embedding(self.vocab_size, self.model_dim)
         self.pos_embedding = nn.Embedding(self.block_size, self.model_dim)
-        self.transformer_block = TransformerBlock(self.model_dim, self.num_heads, self.block_size)
+        self.transformer_blocks = nn.ModuleList(TransformerBlock(self.model_dim, self.num_heads, self.block_size, self.act) for _ in range(self.num_layers))
         self.final_layer_norm = LayerNorm(self.model_dim, 1e-5)
         self.lm_head = nn.Linear(self.model_dim, self.vocab_size)
     
@@ -105,9 +124,9 @@ class KaleGPT(nn.Module):
         word_embeddings = self.embedding(x)
         positions = torch.arange(x.shape[1], device=self.device)
         pos_embeddings = self.pos_embedding(positions)
-        embeddings = word_embeddings + pos_embeddings
-
-        representations = self.transformer_block(embeddings)
+        representations = word_embeddings + pos_embeddings
+        for transformer_block in self.transformer_blocks:
+            representations = transformer_block(representations)
         representations = self.final_layer_norm(representations)
         logits = self.lm_head(representations)
         return logits

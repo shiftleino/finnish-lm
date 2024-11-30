@@ -1,4 +1,5 @@
 import torch
+import time
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from typing import Tuple, Dict, List
@@ -43,7 +44,9 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
     best_val_loss = float("inf")
     patience_counter = 0
 
+    start_time = time.time()
     for step in range(num_steps):
+        
         context, targets = get_batch(train_data, batch_size, block_size)
         logits = model(context)
         loss = F.cross_entropy(logits.view(-1, vocab_size), targets.view(-1))
@@ -62,7 +65,8 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
             val_loss = eval_losses["val"].mean().item()
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            print(f"Step {step} || Train loss: {train_loss:.5f} || Val loss: {val_loss:.5f} || Learning rate: {scheduler.get_last_lr()[0]}")
+            checkpoint_time = time.time()
+            print(f"Step: {step:7} || Train loss: {train_loss:8.5f} || Val loss: {val_loss:8.5f} || Learning rate: {scheduler.get_last_lr()[0]:10.8f} || Tokens per second: {(batch_size*block_size*(step+1)) / (checkpoint_time - start_time):5.3}")
             if checkpointing:
                 torch.save(model.state_dict(), f"{model_name}-checkpoint-{step}.pth")
 
@@ -91,15 +95,18 @@ if __name__ == "__main__":
     device = "mps"
     batch_size = 32
     block_size = 512
-    model_dim = 1024
-    num_heads = 16
+    model_dim = 768
+    num_layers = 3
+    num_heads = 12
+    act = "gelu"
     lr = 1e-3
     num_steps = 10000
     eval_interval = 50
     eval_iterations = 10
     patience = 10
     checkpointing = False
-    model_name = f"kalegpt-transformer-gelu-1-{model_dim}-{num_heads}-{block_size}"
+    num_tokens_generate = 500
+    model_name = f"kalegpt-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
@@ -110,7 +117,7 @@ if __name__ == "__main__":
     train_data = tokens[:n]
     val_data = tokens[n:]
 
-    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=0, block_size=block_size, device=device).to(device)
+    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, device=device).to(device)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
     train_losses, val_losses = train(model, train_data, batch_size, block_size, lr, num_steps, eval_interval, eval_iterations, patience, checkpointing, model_name)
 
@@ -119,8 +126,8 @@ if __name__ == "__main__":
     plot_training_curve(train_losses, eval_interval, title="Train loss")
     plot_training_curve(val_losses, eval_interval, title="Validation loss")
 
-    print("Generating sample of 200 tokens...")
-    generation = model.generate(torch.tensor([[0]]).to("mps"), 200)[0]
+    print(f"Generating sample of {num_tokens_generate} tokens...")
+    generation = model.generate(torch.tensor([[0]]).to("mps"), num_tokens_generate)[0]
     generated_text = tokenizer.decode(generation)
     print(generated_text)
 
