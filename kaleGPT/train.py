@@ -99,6 +99,7 @@ if __name__ == "__main__":
     num_layers = 3
     num_heads = 12
     act = "gelu"
+    norm = "rms"
     lr = 1e-3
     num_steps = 10000
     eval_interval = 50
@@ -106,7 +107,7 @@ if __name__ == "__main__":
     patience = 10
     checkpointing = False
     num_tokens_generate = 300
-    model_name = f"kalegpt-dropout-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
+    model_name = f"kalegpt-dropout-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     train_data = tokens[:n]
     val_data = tokens[n:]
 
-    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, device=device).to(device)
+    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, norm=norm, device=device).to(device)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
     train_losses, val_losses = train(model, train_data, batch_size, block_size, lr, num_steps, eval_interval, eval_iterations, patience, checkpointing, model_name)
 
