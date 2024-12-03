@@ -98,7 +98,7 @@ if __name__ == "__main__":
     model_dim = 768
     num_layers = 3
     num_heads = 12
-    act = "gelu"
+    act = "swiglu"
     norm = "rms"
     lr = 1e-3
     num_steps = 10000

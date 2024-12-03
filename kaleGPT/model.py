@@ -18,10 +18,24 @@ class GELU(nn.Module):
         x = 0.5*x*(1.0 + torch.tanh(0.7978845608*(x+0.044715*x*x*x))) # approximation from Hendrycks & Gimpel (2016)
         return x
 
-class SwiGLU(nn.Module):
+class SiLU(nn.Module):
     def forward(self, x):
-        pass
-    
+        x = x * 1/(1+torch.exp(-x))
+        return x
+
+class SwiGLU(nn.Module):
+    def __init__(self, model_dim):
+        super().__init__()
+        self.model_dim = model_dim
+        self.W_gate = nn.Linear(self.model_dim, 4*self.model_dim)
+        self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
+        self.swish = SiLU()
+
+    def forward(self, x):
+        gate = self.swish(self.W_gate(x))
+        outputs = gate * self.W_up(x)
+        return outputs
+
 class Dropout(nn.Module):
     def __init__(self, dropout_rate=0.5):
         super().__init__()
@@ -34,16 +48,33 @@ class Dropout(nn.Module):
         else:
             return x
 
-class MLP(nn.Module):
-    def __init__(self, model_dim, act):
+class SwiGLUMLP(nn.Module):
+    def __init__(self, model_dim):
         super().__init__()
         self.model_dim = model_dim
+        self.act = SwiGLU(self.model_dim)
+        self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
+        self.hidden_dropout = Dropout()
+        self.out_dropout = Dropout()
+    
+    def forward(self, x: torch.Tensor):
+        h = self.act(x)
+        h = self.hidden_dropout(h)
+        outputs = self.W_down(h)
+        outputs = self.out_dropout(outputs)
+        return outputs
+
+class MLP(nn.Module):
+    def __init__(self, model_dim, act_name):
+        super().__init__()
+        self.model_dim = model_dim
+        self.act_name = act_name
         self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
-        if act == "relu":
+        if self.act_name == "relu":
             self.act = ReLU()
-        elif act == "lrelu":
+        elif self.act_name == "lrelu":
             self.act = LeakyReLU()
-        elif act == "gelu":
+        elif self.act_name == "gelu":
             self.act = GELU()
         else:
             raise ValueError(f"Activation function '{self.act}' is not implemented.")
@@ -131,7 +162,10 @@ class TransformerBlock(nn.Module):
             raise ValueError(f"Undefined normalization: {self.norm}")
         
         self.attn = MultiHeadAttention(self.model_dim, self.num_heads, self.max_block_size)
-        self.mlp = MLP(self.model_dim, self.act)
+        if self.act == "swiglu":
+            self.mlp = SwiGLUMLP(self.model_dim)
+        else:
+            self.mlp = MLP(self.model_dim, self.act)
 
     def forward(self, x):
         attn_output = self.attn(self.norm_pre_attn(x)) + x

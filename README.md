@@ -18,3 +18,4 @@ As the first language model we trained a character-level language model with the
 | Pre-norm Transformer with Dropout (3, 768, 12, 512) | GELU | Embeddings | 0.82735 | 1.01666 | 22M | [Link](./kaleGPT/generations/kalegpt-dropout-gelu-3-768-12-512.txt) |
 | Pre-norm Transformer with Dropout (3, 768, 12, 512) | ReLU | Embeddings | 0.81985 | 1.01711 | 22M | [Link](./kaleGPT/generations/kalegpt-dropout-relu-3-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | GELU | Embeddings | 0.82009 | 1.02458 | 22M | [Link](./kaleGPT/generations/kalegpt-dropout-rmsnorm-gelu-3-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | SwiGLU | Embeddings | 0.83574 | 1.07487 | 29M | [Link](./kaleGPT/generations/kalegpt-dropout-rmsnorm-swiglu-3-768-12-512.txt) |
