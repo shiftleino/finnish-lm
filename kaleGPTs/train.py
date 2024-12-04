@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from typing import Tuple, Dict, List
 from tokenizer import CharTokenizer
-from model import KaleGPT
+from kaleGPT import KaleGPT
+from kaleGPT2 import KaleGPT2
 
 
 def read_data(file_path: str) -> str:
@@ -35,17 +36,18 @@ def eval_loss(model: torch.nn.Module, val_data: torch.Tensor, batch_size: int, b
     model.train()
     return losses
 
-def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, block_size: int, lr: float, num_steps: int, eval_interval: int, eval_iterations: int, patience: int, checkpointing: bool, model_name: str) -> Tuple[List, List]:
+def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, block_size: int, max_block_size: int, lr: float, num_steps: int, eval_interval: int, eval_iterations: int, patience: int, checkpointing: bool, model_name: str) -> Tuple[List, List]:
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
     train_losses = []
     val_losses = []
 
     best_val_loss = float("inf")
     patience_counter = 0
 
-    start_time = time.time()
+    
     for step in range(num_steps):
+        start_time = time.time()
         
         context, targets = get_batch(train_data, batch_size, block_size)
         logits = model(context)
@@ -60,13 +62,15 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
             scheduler.step()
         
         if step % eval_interval == 0:
-            eval_losses = eval_loss(model, val_data, batch_size, block_size, eval_iterations)
+            checkpoint_time = time.time()
+
+            eval_losses = eval_loss(model, val_data, batch_size, max_block_size, eval_iterations)
             train_loss = eval_losses["train"].mean().item()
             val_loss = eval_losses["val"].mean().item()
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            checkpoint_time = time.time()
-            print(f"Step: {step:7} || Train loss: {train_loss:8.5f} || Val loss: {val_loss:8.5f} || Learning rate: {scheduler.get_last_lr()[0]:10.8f} || Tokens per second: {(batch_size*block_size*(step+1)) / (checkpoint_time - start_time):5.3}")
+            
+            print(f"Step: {step:7} || Train loss: {train_loss:8.5f} || Val loss: {val_loss:8.5f} || Learning rate: {scheduler.get_last_lr()[0]:10.8f} || Tokens per second: {(batch_size*block_size*eval_interval) / (checkpoint_time - start_time):5.3}")
             if checkpointing:
                 torch.save(model.state_dict(), f"{model_name}-checkpoint-{step}.pth")
 
@@ -94,20 +98,22 @@ if __name__ == "__main__":
     file_path = "kalevala.txt"
     device = "mps"
     batch_size = 32
-    block_size = 512
+    block_size = 256 # Which block size to train
+    max_block_size = 512 # Which block size to allow for inference
     model_dim = 768
     num_layers = 3
     num_heads = 12
-    act = "swiglu"
-    norm = "rms"
-    lr = 1e-3
+    act = "relu" # relu, lrelu, gelu, swiglu
+    norm = "rms" # layer, rms
+    position = "alibi" # embed, alibi
+    lr = 1e-4
     num_steps = 10000
     eval_interval = 50
     eval_iterations = 10
     patience = 10
     checkpointing = False
     num_tokens_generate = 300
-    model_name = f"kalegpt-dropout-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
+    model_name = f"kalegpt-2-dropout-{position}-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
@@ -117,10 +123,13 @@ if __name__ == "__main__":
     n = int(len(tokens) * 0.9)
     train_data = tokens[:n]
     val_data = tokens[n:]
-
-    model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, norm=norm, device=device).to(device)
+    
+    if position == "embed":
+        model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, norm=norm, device=device).to(device)
+    elif position == "alibi":
+        model = KaleGPT2(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device).to(device)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
-    train_losses, val_losses = train(model, train_data, batch_size, block_size, lr, num_steps, eval_interval, eval_iterations, patience, checkpointing, model_name)
+    train_losses, val_losses = train(model, train_data=train_data, batch_size=batch_size, block_size=block_size, max_block_size=max_block_size, lr=lr, num_steps=num_steps, eval_interval=eval_interval, eval_iterations=eval_iterations, patience=patience, checkpointing=checkpointing, model_name=model_name)
 
     torch.save(model.state_dict(), f"models/{model_name}.pth")
 

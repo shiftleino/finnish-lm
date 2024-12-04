@@ -2,60 +2,19 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import activation_functions as actfunc
+import regularization as reg
+import normalization as norms
 
-class ReLU(nn.Module):
-    def forward(self, x):
-        x = torch.clamp(x, min=0)
-        return x
-    
-class LeakyReLU(nn.Module):
-    def forward(self, x):
-        x = torch.where(x >= 0, x, 0.01*x)
-        return x
-
-class GELU(nn.Module):
-    def forward(self, x):
-        x = 0.5*x*(1.0 + torch.tanh(0.7978845608*(x+0.044715*x*x*x))) # approximation from Hendrycks & Gimpel (2016)
-        return x
-
-class SiLU(nn.Module):
-    def forward(self, x):
-        x = x * 1/(1+torch.exp(-x))
-        return x
-
-class SwiGLU(nn.Module):
-    def __init__(self, model_dim):
-        super().__init__()
-        self.model_dim = model_dim
-        self.W_gate = nn.Linear(self.model_dim, 4*self.model_dim)
-        self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
-        self.swish = SiLU()
-
-    def forward(self, x):
-        gate = self.swish(self.W_gate(x))
-        outputs = gate * self.W_up(x)
-        return outputs
-
-class Dropout(nn.Module):
-    def __init__(self, dropout_rate=0.5):
-        super().__init__()
-        self.dropout_rate = dropout_rate
-
-    def forward(self, x):
-        if self.training:
-            mask = (torch.rand_like(x) < (1-self.dropout_rate)).float()
-            return x * mask * (1 / (1 - self.dropout_rate)) # apply scaling in training different from original article (Srivastava et al., 2014)
-        else:
-            return x
 
 class SwiGLUMLP(nn.Module):
     def __init__(self, model_dim):
         super().__init__()
         self.model_dim = model_dim
-        self.act = SwiGLU(self.model_dim)
+        self.act = actfunc.SwiGLU(self.model_dim)
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
-        self.hidden_dropout = Dropout()
-        self.out_dropout = Dropout()
+        self.hidden_dropout = reg.Dropout()
+        self.out_dropout = reg.Dropout()
     
     def forward(self, x: torch.Tensor):
         h = self.act(x)
@@ -71,16 +30,16 @@ class MLP(nn.Module):
         self.act_name = act_name
         self.W_up = nn.Linear(self.model_dim, 4*self.model_dim)
         if self.act_name == "relu":
-            self.act = ReLU()
+            self.act = actfunc.ReLU()
         elif self.act_name == "lrelu":
-            self.act = LeakyReLU()
+            self.act = actfunc.LeakyReLU()
         elif self.act_name == "gelu":
-            self.act = GELU()
+            self.act = actfunc.GELU()
         else:
             raise ValueError(f"Activation function '{self.act}' is not implemented.")
         self.W_down = nn.Linear(4*self.model_dim, self.model_dim)
-        self.hidden_dropout = Dropout()
-        self.out_dropout = Dropout()
+        self.hidden_dropout = reg.Dropout()
+        self.out_dropout = reg.Dropout()
     
     def forward(self, x: torch.Tensor):
         h = self.act(self.W_up(x))
@@ -100,8 +59,8 @@ class MultiHeadAttention(nn.Module):
         # All weights grouped together for efficiency as same dim in q, k, v
         self.W_qkv = torch.nn.Linear(self.model_dim, 3*self.model_dim) # 3 for query, key, value
         self.W_o = nn.Linear(self.model_dim, self.model_dim)
-        self.attn_dropout = Dropout()
-        self.out_dropout = Dropout()
+        self.attn_dropout = reg.Dropout()
+        self.out_dropout = reg.Dropout()
         self.register_buffer("mask", torch.tril(torch.ones((self.max_block_size, self.max_block_size))) == 0)
 
     def forward(self, x: torch.Tensor):
@@ -119,30 +78,6 @@ class MultiHeadAttention(nn.Module):
         outputs = self.out_dropout(outputs)
         return outputs
 
-class LayerNorm(nn.Module):
-    def __init__(self, model_dim, eps):
-        super().__init__()
-        self.eps = eps
-        self.model_dim = model_dim
-        self.gamma = nn.Parameter(torch.ones(self.model_dim))
-        self.beta = nn.Parameter(torch.zeros(self.model_dim))
-    
-    def forward(self, x):
-        normalized = (x - x.mean(dim=-1, keepdim=True)) / (x.std(dim=-1, keepdim=True) + self.eps)
-        return self.gamma * normalized + self.beta
-
-class RMSNorm(nn.Module):
-    def __init__(self, model_dim, eps=1e-5):
-        super().__init__()
-        self.model_dim = model_dim
-        self.eps = eps
-        self.gain = nn.Parameter(torch.ones(self.model_dim))
-
-    def forward(self, x):
-        rms = ((x**2).sum(dim=-1, keepdim=True) / x.size(-1))**(0.5)
-        normalized = x / (rms + self.eps)
-        return self.gain * normalized
-
 class TransformerBlock(nn.Module):
     def __init__(self, model_dim: int, num_heads: int, max_block_size: int, act: str, norm: str):
         super().__init__()
@@ -153,11 +88,11 @@ class TransformerBlock(nn.Module):
         self.norm = norm
 
         if norm == "layer":
-            self.norm_pre_attn = LayerNorm(self.model_dim, 1e-5)
-            self.norm_pre_mlp = LayerNorm(self.model_dim, 1e-5)
+            self.norm_pre_attn = norms.LayerNorm(self.model_dim, 1e-5)
+            self.norm_pre_mlp = norms.LayerNorm(self.model_dim, 1e-5)
         elif norm == "rms":
-            self.norm_pre_attn = RMSNorm(self.model_dim)
-            self.norm_pre_mlp = RMSNorm(self.model_dim)
+            self.norm_pre_attn = norms.RMSNorm(self.model_dim)
+            self.norm_pre_mlp = norms.RMSNorm(self.model_dim)
         else:
             raise ValueError(f"Undefined normalization: {self.norm}")
         
@@ -187,9 +122,9 @@ class KaleGPT(nn.Module):
         self.pos_embedding = nn.Embedding(self.block_size, self.model_dim)
         self.transformer_blocks = nn.ModuleList(TransformerBlock(self.model_dim, self.num_heads, self.block_size, self.act, self.norm) for _ in range(self.num_layers))
         if norm == "layer":
-            self.final_norm = LayerNorm(self.model_dim, 1e-5)
+            self.final_norm = norms.LayerNorm(self.model_dim, 1e-5)
         elif norm == "rms":
-            self.final_norm = RMSNorm(self.model_dim)
+            self.final_norm = norms.RMSNorm(self.model_dim)
         else:
             raise ValueError(f"Undefined normalization: {self.norm}")
         self.lm_head = nn.Linear(self.model_dim, self.vocab_size)
