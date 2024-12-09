@@ -21,3 +21,4 @@ As the first language model we trained a character-level language model with the
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | SwiGLU | Embeddings | 0.83574 | 1.07487 | 29M | [Link](./kaleGPTs/generations/kalegpt-dropout-rmsnorm-swiglu-3-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | ReLU | ALiBi | 1.00742 | 1.14893 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-alibi-rmsnorm-relu-3-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 256) | ReLU | ALiBi | 1.11632 | 1.18132 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-alibi-rmsnorm-relu-3-768-12-256.txt) |
+| Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | ReLU | RoPE | 0.75139 | 1.03126 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-3-768-12-512.txt) |

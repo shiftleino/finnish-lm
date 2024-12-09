@@ -6,6 +6,7 @@ from typing import Tuple, Dict, List
 from tokenizer import CharTokenizer
 from kaleGPT import KaleGPT
 from kaleGPT2 import KaleGPT2
+from kaleGPT3 import KaleGPT3
 
 
 def read_data(file_path: str) -> str:
@@ -98,22 +99,22 @@ if __name__ == "__main__":
     file_path = "kalevala.txt"
     device = "mps"
     batch_size = 32
-    block_size = 256 # Which block size to train
+    block_size = 512 # Which block size to train
     max_block_size = 512 # Which block size to allow for inference
     model_dim = 768
     num_layers = 3
     num_heads = 12
     act = "relu" # relu, lrelu, gelu, swiglu
     norm = "rms" # layer, rms
-    position = "alibi" # embed, alibi
-    lr = 1e-4
+    position = "rope" # embed, alibi, rope
+    lr = 1e-3
     num_steps = 10000
     eval_interval = 50
     eval_iterations = 10
     patience = 10
     checkpointing = False
     num_tokens_generate = 300
-    model_name = f"kalegpt-2-dropout-{position}-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
+    model_name = f"kalegpt-dropout-{position}-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
     text = read_data(file_path)
     tokenizer = CharTokenizer(text)
@@ -128,6 +129,10 @@ if __name__ == "__main__":
         model = KaleGPT(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, block_size=block_size, act=act, norm=norm, device=device).to(device)
     elif position == "alibi":
         model = KaleGPT2(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device).to(device)
+    elif position == "rope":
+        model = KaleGPT3(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device).to(device)
+
+    print(model)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
     train_losses, val_losses = train(model, train_data=train_data, batch_size=batch_size, block_size=block_size, max_block_size=max_block_size, lr=lr, num_steps=num_steps, eval_interval=eval_interval, eval_iterations=eval_iterations, patience=patience, checkpointing=checkpointing, model_name=model_name)
 
