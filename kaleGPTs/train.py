@@ -97,14 +97,14 @@ def plot_training_curve(losses, eval_interval, title):
 
 if __name__ == "__main__":
     file_path = "kalevala.txt"
-    device = "mps"
+    device = "cuda:0"
     batch_size = 32
     block_size = 512 # Which block size to train
     max_block_size = 512 # Which block size to allow for inference
     model_dim = 768
-    num_layers = 3
+    num_layers = 12
     num_heads = 12
-    act = "relu" # relu, lrelu, gelu, swiglu
+    act = "swiglu" # relu, lrelu, gelu, swiglu
     norm = "rms" # layer, rms
     position = "rope" # embed, alibi, rope
     lr = 1e-3
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     plot_training_curve(val_losses, eval_interval, title="Validation loss")
 
     print(f"Generating sample of {num_tokens_generate} tokens...")
-    generation = model.generate(torch.tensor([[0]]).to("mps"), num_tokens_generate)[0]
+    generation = model.generate(torch.tensor([[0]]).to(device), num_tokens_generate)[0]
     generated_text = tokenizer.decode(generation)
     print(generated_text)
 

@@ -4,7 +4,7 @@ This repository contains implementations for Finnish language models using vario
 Heavily inspired by and partly following the great Andrej Karpathy [nanoGPT-series](https://github.com/karpathy/nanoGPT) (see e.g., [Let's build GPT: from scratch, in code, spelled out.](https://www.youtube.com/watch?v=kCc8FmEb1nY)).
 
 ## 1. Char-level LM trained with Kalevala
-As the first language model we trained a character-level language model with the Finnish national epic Kalevala and followed how the different techniques contributed to the model performance. The version specifications are in the format of (number of layers, model dimension, number of attention heads, block size). In training, we use early stopping with patience of 10. All the runs use a block size of 512 tokens for evaluating the validation loss. 
+As the first language model we trained a character-level language model with the Finnish national epic Kalevala and followed how the different techniques contributed to the model performance. The version specifications are in the format of (number of layers, model dimension, number of attention heads, block size). In training, we use early stopping with patience of 10. All the runs use a block size of 512 tokens for evaluating the validation loss. For models with under 30M parameters we use a Macbook and Metal Performance Shaders to train the model, while for models with over 30M parameters we use an AMD GPU and ROCm.
 
  | Model version | Non-linearity | Positional information | Training loss | Validation loss | Parameters | Generations |
  |:----------:|:----------:|:----------:|:----------:|:----------:| :----------:| :----------:|
@@ -22,3 +22,7 @@ As the first language model we trained a character-level language model with the
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | ReLU | ALiBi | 1.00742 | 1.14893 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-alibi-rmsnorm-relu-3-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 256) | ReLU | ALiBi | 1.11632 | 1.18132 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-alibi-rmsnorm-relu-3-768-12-256.txt) |
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | ReLU | RoPE | 0.75139 | 1.03126 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-3-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (5, 768, 12, 512) | ReLU | RoPE | 0.73791 | 0.99258 | 36M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-5-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (8, 768, 12, 512) | ReLU | RoPE | 0.78057 | 0.97327 | 57M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-8-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (12, 768, 12, 512) | ReLU | RoPE | 0.81678 | 0.97046 | 85M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-12-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (12, 768, 12, 512) | SwiGLU | RoPE |  | | 85M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-swiglu-12-768-12-512.txt) |
