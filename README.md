@@ -24,5 +24,5 @@ As the first language model we trained a character-level language model with the
 | Pre-RMSNorm Transformer with Dropout (3, 768, 12, 512) | ReLU | RoPE | 0.75139 | 1.03126 | 21M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-3-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (5, 768, 12, 512) | ReLU | RoPE | 0.73791 | 0.99258 | 36M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-5-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (8, 768, 12, 512) | ReLU | RoPE | 0.78057 | 0.97327 | 57M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-8-768-12-512.txt) |
+| Pre-RMSNorm Transformer with Dropout (8, 768, 12, 512) | SwiGLU | RoPE | 0.61169 | 0.96818 | 76M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-swiglu-8-768-12-512.txt) |
 | Pre-RMSNorm Transformer with Dropout (12, 768, 12, 512) | ReLU | RoPE | 0.81678 | 0.97046 | 85M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-relu-12-768-12-512.txt) |
-| Pre-RMSNorm Transformer with Dropout (12, 768, 12, 512) | SwiGLU | RoPE |  | | 85M | [Link](./kaleGPTs/generations/kalegpt-dropout-rope-rmsnorm-swiglu-12-768-12-512.txt) |

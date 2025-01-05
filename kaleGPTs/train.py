@@ -102,12 +102,12 @@ if __name__ == "__main__":
     block_size = 512 # Which block size to train
     max_block_size = 512 # Which block size to allow for inference
     model_dim = 768
-    num_layers = 12
+    num_layers = 8
     num_heads = 12
     act = "swiglu" # relu, lrelu, gelu, swiglu
     norm = "rms" # layer, rms
     position = "rope" # embed, alibi, rope
-    lr = 1e-3
+    lr = 1e-4
     num_steps = 10000
     eval_interval = 50
     eval_iterations = 10
