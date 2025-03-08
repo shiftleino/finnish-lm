@@ -10,6 +10,7 @@ import normalization as norms
 import torch.utils.checkpoint as cp
 
 
+@torch.compile
 class SwiGLUMLP(nn.Module):
     def __init__(self, model_dim):
         super().__init__()
@@ -51,6 +52,7 @@ class MLP(nn.Module):
         outputs = self.out_dropout(outputs)
         return outputs
 
+@torch.compile
 class MultiHeadAttentionRoPE(nn.Module):
     def __init__(self, model_dim, num_heads, use_recomputation=False):
         super().__init__()
@@ -93,6 +95,7 @@ class MultiHeadAttentionRoPE(nn.Module):
             return cp.checkpoint(forward_func, x, attn_mask, cosines, sines, perm_mask, neg_mask, use_reentrant=False)
         return forward_func(x, attn_mask, cosines, sines, perm_mask, neg_mask)
 
+@torch.compile
 class TransformerBlock(nn.Module):
     def __init__(self, model_dim: int, num_heads: int, act: str, norm: str, use_recomputation=False):
         super().__init__()
@@ -122,6 +125,7 @@ class TransformerBlock(nn.Module):
         mlp_output = self.mlp(self.norm_pre_mlp(attn_output)) + attn_output
         return mlp_output
 
+@torch.compile
 class KaleGPT3(nn.Module):
     def __init__(self, vocab_size, model_dim, num_heads, num_layers, max_block_size, act, norm, device, use_recomputation=False):
         super().__init__()

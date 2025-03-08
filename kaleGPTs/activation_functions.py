@@ -1,26 +1,31 @@
 import torch
 import torch.nn as nn
 
+@torch.compile
 class ReLU(nn.Module):
     def forward(self, x):
         x = torch.clamp(x, min=0)
         return x
-    
+
+@torch.compile
 class LeakyReLU(nn.Module):
     def forward(self, x):
         x = torch.where(x >= 0, x, 0.01*x)
         return x
 
+@torch.compile
 class GELU(nn.Module):
     def forward(self, x):
         x = 0.5*x*(1.0 + torch.tanh(0.7978845608*(x+0.044715*x*x*x))) # approximation from Hendrycks & Gimpel (2016)
         return x
 
+@torch.compile
 class SiLU(nn.Module):
     def forward(self, x):
         x = x * 1/(1+torch.exp(-x))
         return x
 
+@torch.compile
 class SwiGLU(nn.Module):
     def __init__(self, model_dim):
         super().__init__()
