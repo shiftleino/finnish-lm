@@ -8,6 +8,8 @@ from kaleGPT import KaleGPT
 from kaleGPT2 import KaleGPT2
 from kaleGPT3 import KaleGPT3
 
+from torch.profiler import profile, ProfilerActivity
+
 
 def read_data(file_path: str) -> str:
     with open(file_path, "r", encoding="latin-1") as f:
@@ -46,44 +48,50 @@ def train(model: torch.nn.Module, train_data: torch.Tensor, batch_size: int, blo
     best_val_loss = float("inf")
     patience_counter = 0
 
-    
-    for step in range(num_steps):
-        start_time = time.time()
-        
-        context, targets = get_batch(train_data, batch_size, block_size)
-        logits = model(context)
-        loss = F.cross_entropy(logits.view(-1, vocab_size), targets.view(-1))
-
-        optimizer.zero_grad(set_to_none=True)
-
-        loss.backward()
-        optimizer.step()
-
-        if step % 100 == 0:
-            scheduler.step()
-        
-        if step % eval_interval == 0:
-            checkpoint_time = time.time()
-
-            eval_losses = eval_loss(model, val_data, batch_size, max_block_size, eval_iterations)
-            train_loss = eval_losses["train"].mean().item()
-            val_loss = eval_losses["val"].mean().item()
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
+    with profile(activities=[
+        ProfilerActivity.CPU, 
+        torch.profiler.ProfilerActivity.CUDA], 
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(f'./log/{model_name}/profile'),
+        with_stack=True) as prof:
+        for step in range(num_steps):
+            start_time = time.time()
             
-            print(f"Step: {step:7} || Train loss: {train_loss:8.5f} || Val loss: {val_loss:8.5f} || Learning rate: {scheduler.get_last_lr()[0]:10.8f} || Tokens per second: {(batch_size*block_size*eval_interval) / (checkpoint_time - start_time):5.3}")
-            if checkpointing:
-                torch.save(model.state_dict(), f"{model_name}-checkpoint-{step}.pth")
+            context, targets = get_batch(train_data, batch_size, block_size)
+            logits = model(context)
+            loss = F.cross_entropy(logits.view(-1, vocab_size), targets.view(-1))
 
-            # Implement early stopping
-            if val_loss >= best_val_loss:
-                patience_counter += 1
-                if patience_counter >= patience:
-                    print(f"Early stopping at step {step}")
-                    break
-            else:
-                best_val_loss = val_loss
-                patience_counter = 0
+            optimizer.zero_grad(set_to_none=True)
+
+            loss.backward()
+            optimizer.step()
+            prof.step()
+
+            if step % 100 == 0:
+                scheduler.step()
+            
+            if step % eval_interval == 0:
+                checkpoint_time = time.time()
+
+                eval_losses = eval_loss(model, val_data, batch_size, max_block_size, eval_iterations)
+                train_loss = eval_losses["train"].mean().item()
+                val_loss = eval_losses["val"].mean().item()
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                
+                print(f"Step: {step:7} || Train loss: {train_loss:8.5f} || Val loss: {val_loss:8.5f} || Learning rate: {scheduler.get_last_lr()[0]:10.8f} || Tokens per second: {(batch_size*block_size*eval_interval) / (checkpoint_time - start_time):5.3}")
+                if checkpointing:
+                    torch.save(model.state_dict(), f"{model_name}-checkpoint-{step}.pth")
+
+                # Implement early stopping
+                if val_loss >= best_val_loss:
+                    patience_counter += 1
+                    if patience_counter >= patience:
+                        print(f"Early stopping at step {step}")
+                        break
+                else:
+                    best_val_loss = val_loss
+                    patience_counter = 0
 
     return train_losses, val_losses
 
@@ -113,6 +121,7 @@ if __name__ == "__main__":
     eval_iterations = 10
     patience = 10
     checkpointing = False
+    use_recomputation = False
     num_tokens_generate = 300
     model_name = f"kalegpt-dropout-{position}-{norm}norm-{act}-{num_layers}-{model_dim}-{num_heads}-{block_size}"
 
@@ -130,7 +139,7 @@ if __name__ == "__main__":
     elif position == "alibi":
         model = KaleGPT2(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device).to(device)
     elif position == "rope":
-        model = KaleGPT3(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device).to(device)
+        model = KaleGPT3(vocab_size, model_dim=model_dim, num_heads=num_heads, num_layers=num_layers, max_block_size=max_block_size, act=act, norm=norm, device=device, use_recomputation=use_recomputation).to(device)
 
     print(model)
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")

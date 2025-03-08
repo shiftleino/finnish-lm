@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import activation_functions as actfunc
 import regularization as reg
 import normalization as norms
+import torch.utils.checkpoint as cp
 
 
 class SwiGLUMLP(nn.Module):
@@ -51,7 +52,7 @@ class MLP(nn.Module):
         return outputs
 
 class MultiHeadAttentionRoPE(nn.Module):
-    def __init__(self, model_dim, num_heads):
+    def __init__(self, model_dim, num_heads, use_recomputation=False):
         super().__init__()
         self.model_dim = model_dim
         self.num_heads = num_heads
@@ -63,36 +64,43 @@ class MultiHeadAttentionRoPE(nn.Module):
         self.attn_dropout = reg.Dropout()
         self.out_dropout = reg.Dropout()
 
+        self.use_recomputation = use_recomputation
+
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, cosines: torch.Tensor, sines: torch.Tensor, perm_mask: torch.Tensor, neg_mask: torch.Tensor):
-        batch_size, block_size, _ = x.shape
+        def forward_func(x: torch.Tensor, attn_mask: torch.Tensor, cosines: torch.Tensor, sines: torch.Tensor, perm_mask: torch.Tensor, neg_mask: torch.Tensor):
+            batch_size, block_size, _ = x.shape
 
-        qkv = self.W_qkv(x)
-        qkv = qkv.view(batch_size, block_size, self.num_heads, 3, self.attn_dim) # Split the result between attn_heads
-        queries, keys, values = qkv[:, :, :, 0, :], qkv[:, :, :, 1, :], qkv[:, :, :, 2, :] # non-contiguous in memory!!
-        q = queries.transpose(1, 2) # (batch, block, head, dim) -> (batch, head, block, dim)
-        k = keys.transpose(1,2) # (batch, block, head, dim) -> (batch, head, block, dim)
+            qkv = self.W_qkv(x)
+            qkv = qkv.view(batch_size, block_size, self.num_heads, 3, self.attn_dim) # Split the result between attn_heads
+            queries, keys, values = qkv[:, :, :, 0, :], qkv[:, :, :, 1, :], qkv[:, :, :, 2, :] # non-contiguous in memory!!
+            q = queries.transpose(1, 2) # (batch, block, head, dim) -> (batch, head, block, dim)
+            k = keys.transpose(1,2) # (batch, block, head, dim) -> (batch, head, block, dim)
 
-        q_perm = q[:, :, :, perm_mask] * neg_mask
-        k_perm = k[:, :, :, perm_mask] * neg_mask
-        rope_q = cosines * q + q_perm*sines
-        rope_k = cosines * k + k_perm*sines
-       
-        qk = rope_q @ rope_k.transpose(2, 3) / math.sqrt(self.attn_dim)
-        masked_qk = torch.masked_fill(qk, attn_mask, float("-inf"))
-        attn_o = F.softmax(masked_qk, dim=-1) @ values.transpose(1, 2)
+            q_perm = q[:, :, :, perm_mask] * neg_mask
+            k_perm = k[:, :, :, perm_mask] * neg_mask
+            rope_q = cosines * q + q_perm*sines
+            rope_k = cosines * k + k_perm*sines
+        
+            qk = rope_q @ rope_k.transpose(2, 3) / math.sqrt(self.attn_dim)
+            masked_qk = torch.masked_fill(qk, attn_mask, float("-inf"))
+            attn_o = F.softmax(masked_qk, dim=-1) @ values.transpose(1, 2)
 
-        attn_o = self.attn_dropout(attn_o)
-        outputs = self.W_o(attn_o.transpose(1, 2).reshape(batch_size, block_size, self.model_dim)) # Use reshape as tensor is not contiguous due to transposes
-        outputs = self.out_dropout(outputs)
-        return outputs
+            attn_o = self.attn_dropout(attn_o)
+            outputs = self.W_o(attn_o.transpose(1, 2).reshape(batch_size, block_size, self.model_dim)) # Use reshape as tensor is not contiguous due to transposes
+            outputs = self.out_dropout(outputs)
+            return outputs
+        if self.use_recomputation:
+            return cp.checkpoint(forward_func, x, attn_mask, cosines, sines, perm_mask, neg_mask, use_reentrant=False)
+        return forward_func(x, attn_mask, cosines, sines, perm_mask, neg_mask)
 
 class TransformerBlock(nn.Module):
-    def __init__(self, model_dim: int, num_heads: int, act: str, norm: str):
+    def __init__(self, model_dim: int, num_heads: int, act: str, norm: str, use_recomputation=False):
         super().__init__()
         self.model_dim = model_dim
         self.num_heads = num_heads
         self.act = act
         self.norm = norm
+        self.use_recomputation = use_recomputation
 
         if norm == "layer":
             self.norm_pre_attn = norms.LayerNorm(self.model_dim, 1e-5)
@@ -103,7 +111,7 @@ class TransformerBlock(nn.Module):
         else:
             raise ValueError(f"Undefined normalization: {self.norm}")
         
-        self.attn = MultiHeadAttentionRoPE(self.model_dim, self.num_heads)
+        self.attn = MultiHeadAttentionRoPE(self.model_dim, self.num_heads, self.use_recomputation)
         if self.act == "swiglu":
             self.mlp = SwiGLUMLP(self.model_dim)
         else:
@@ -115,7 +123,7 @@ class TransformerBlock(nn.Module):
         return mlp_output
 
 class KaleGPT3(nn.Module):
-    def __init__(self, vocab_size, model_dim, num_heads, num_layers, max_block_size, act, norm, device):
+    def __init__(self, vocab_size, model_dim, num_heads, num_layers, max_block_size, act, norm, device, use_recomputation=False):
         super().__init__()
         self.vocab_size = vocab_size
         self.model_dim = model_dim
@@ -126,8 +134,9 @@ class KaleGPT3(nn.Module):
         self.act = act
         self.norm = norm
         self.device = device
+        self.use_recomputation = use_recomputation
         self.embedding = nn.Embedding(self.vocab_size, self.model_dim)
-        self.transformer_blocks = nn.ModuleList(TransformerBlock(self.model_dim, self.num_heads, self.act, self.norm) for _ in range(self.num_layers))
+        self.transformer_blocks = nn.ModuleList(TransformerBlock(self.model_dim, self.num_heads, self.act, self.norm, self.use_recomputation) for _ in range(self.num_layers))
         if norm == "layer":
             self.final_norm = norms.LayerNorm(self.model_dim, 1e-5)
         elif norm == "rms":

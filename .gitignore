@@ -3,6 +3,7 @@
 *.pth
 *.pt
 *.png
+*/log/*
 
 # Files
 *.csv
